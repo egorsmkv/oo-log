@@ -1,15 +1,36 @@
 # OpenObserve log feeder
 
-## Dev
+## Run OpenObserve instance
 
 ```
-RUST_LOG=debug cargo run -- --source-file log_sources.txt --ob-url http://localhost:5080 --ob-username "root@example.com" --ob-password "Complexpass#123" --ob-org default --ob-stream default
+docker compose up -d
 ```
 
-## Build
+## Run
+
+### Dev
+
+```
+RUST_LOG=debug cargo run -- \
+  --source-file log_sources.txt \
+  --ob-url http://localhost:5080 \
+  --ob-username "root@example.com" \
+  --ob-password "Complexpass#123" \
+  --ob-org default \
+  --ob-stream default
+```
+
+### Prod
 
 ```
 cargo build --release
 
 cp target/release/oo-log .
+
+./oo-log --source-file log_sources.txt \
+  --ob-url http://localhost:5080 \
+  --ob-username "root@example.com" \
+  --ob-password "Complexpass#123" \
+  --ob-org default \
+  --ob-stream default
 ```
