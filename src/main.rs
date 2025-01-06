@@ -8,7 +8,7 @@ use http::StatusCode;
 use linemux::MuxedLines;
 use log::{debug, error, info, warn};
 use reqwest::header::HeaderMap;
-use serde_json;
+use serde_json::Value;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -36,10 +36,6 @@ struct Args {
     /// OpenObserve: stream
     #[arg(long)]
     ob_stream: String,
-}
-
-fn is_valid_json(value: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(value).is_ok()
 }
 
 #[tokio::main]
@@ -91,25 +87,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Read lines and send them to an API
     while let Ok(Some(line)) = lines.next_line().await {
-        let json_row = line.line().to_string();
+        let row = line.line().to_string();
 
-        debug!("A new line: {}", json_row);
+        debug!("A new line: {}", row);
 
         // Check emptiness
-        if json_row.is_empty() {
+        if row.is_empty() {
             warn!("A line is empty");
             continue;
         }
 
         // Validate JSON
-        if !is_valid_json(json_row.as_str()) {
+        let ok = serde_json::from_str::<Value>(row.as_str()).is_ok();
+        if !ok {
             warn!("A line is not valid JSON");
             continue;
         }
 
         match client
             .post(openobserve_ingest_url.clone())
-            .body(json_row)
+            .body(row)
             .headers(headers.clone())
             .send()
             .await
