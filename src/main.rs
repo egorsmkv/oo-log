@@ -2,8 +2,9 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::prelude::*;
 use clap::Parser;
+use http::StatusCode;
 use linemux::MuxedLines;
 use log::{debug, error, info, warn};
 use reqwest::header::HeaderMap;
@@ -37,11 +38,8 @@ struct Args {
     ob_stream: String,
 }
 
-fn is_valid_json(json_str: &str) -> bool {
-    match serde_json::from_str::<serde_json::Value>(json_str) {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+fn is_valid_json(value: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(value).is_ok()
 }
 
 #[tokio::main]
@@ -50,6 +48,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let args = Args::parse();
 
+    debug!("Arguments:");
     debug!("source_file: {}", args.source_file);
     debug!("ob_url: {}", args.ob_url);
     debug!("ob_username: {}", args.ob_username);
@@ -74,10 +73,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let client = reqwest::Client::new();
 
+    // Construct the endpoint of OpenObserve
+    let openobserve_ingest_url = format!(
+        "{}/api/{}/{}/_json",
+        args.ob_url, args.ob_org, args.ob_stream
+    );
+
     // Encode credentials
     let creds = format!("{}:{}", args.ob_username, args.ob_password);
-    let base64encoded_creds = STANDARD.encode(creds);
-    let authorization = format!("Basic {}", base64encoded_creds);
+    let creds_encoded = BASE64_STANDARD.encode(creds);
+    let authorization = format!("Basic {}", creds_encoded);
 
     // Create headers to authorize
     let mut headers = HeaderMap::new();
@@ -86,10 +91,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Read lines and send them to an API
     while let Ok(Some(line)) = lines.next_line().await {
-        // let source = line.source().display();
         let json_row = line.line().to_string();
 
-        debug!("a new line: {}", json_row);
+        debug!("A new line: {}", json_row);
 
         // Check emptiness
         if json_row.is_empty() {
@@ -103,31 +107,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
             continue;
         }
 
-        // Construct the endpoint of OpenObserve
-        let openobserve_url = format!(
-            "{}/api/{}/{}/_json",
-            args.ob_url, args.ob_org, args.ob_stream
-        );
-
         match client
-            .post(openobserve_url)
+            .post(openobserve_ingest_url.clone())
             .body(json_row)
             .headers(headers.clone())
             .send()
             .await
         {
-            Ok(response) => {
-                let status = response.status();
-                let resp = response.text().await?;
+            Ok(r) => {
+                let status = r.status();
+                let text = r.text().await?;
 
-                if status != 200 {
-                    warn!("Something went wrong:");
-                    warn!("Status code: {:#?}", status);
-                    warn!("{:#?}", resp);
+                if status != StatusCode::OK {
+                    warn!(
+                        "Something went wrong, status code: {:#?}, response:",
+                        status
+                    );
+                } else {
+                    info!("Success response:");
                 }
 
-                info!("Success response:");
-                info!("{:#?}", resp);
+                info!("{:#?}", text);
             }
             Err(e) => {
                 if e.is_connect() {

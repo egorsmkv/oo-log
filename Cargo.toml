@@ -7,6 +7,7 @@ edition = "2021"
 base64 = "0.22.1"
 clap = { version = "4.5.23", features = ["derive"] }
 env_logger = "0.11.6"
+http = "1.2.0"
 linemux = "0.3"
 log = "0.4.22"
 reqwest = "0.12.12"
