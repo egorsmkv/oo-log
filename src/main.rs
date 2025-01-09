@@ -13,7 +13,7 @@ use serde_json::Value;
 #[derive(Parser, Debug)]
 #[command(version)]
 struct Args {
-    /// Name of the person to greet
+    /// A source file with paths to log files
     #[arg(long)]
     source_file: String,
 
